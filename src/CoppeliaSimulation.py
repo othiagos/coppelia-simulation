@@ -17,7 +17,7 @@ def init_coppelia() -> tuple[RemoteAPIClient, Any]:
     :return: tuple with Remoteclient and the sim handle.
     """
     client_init: RemoteAPIClient = RemoteAPIClient()
-    sim_init = client_init.getObject('sim')
+    sim_init = client_init.getObject("sim")
     client_init.setStepping(True)
     sim_init.startSimulation()
     return client_init, sim_init
@@ -37,13 +37,15 @@ def init_control(handle_names: list, sim) -> dict:
     return handles
 
 
-def set_quadcopter_pos_ori(position: ndarray,
-                           orientation: ndarray,
-                           quad_target_handle: Any,
-                           quad_base_handle: Any,
-                           sim: Any,
-                           client: Any,
-                           fast_set: bool = False):
+def set_quadcopter_pos_ori(
+    position: ndarray,
+    orientation: ndarray,
+    quad_target_handle: Any,
+    quad_base_handle: Any,
+    sim: Any,
+    client: Any,
+    fast_set: bool = False,
+):
     """
     This method is used to move the quadcopter in the CoppeliaSim scene to the position pos.
     :param sim:
@@ -57,6 +59,8 @@ def set_quadcopter_pos_ori(position: ndarray,
 
     MIN_DIFF_POS = 0.05
     MIN_DIFF_ORI = 0.02
+    simulation_time = sim.getSimulationTime()
+    t_stab = 20
 
     if fast_set:
         MIN_DIFF_POS = 0.2
@@ -86,8 +90,16 @@ def set_quadcopter_pos_ori(position: ndarray,
         norm_diff_pos_final = np.linalg.norm(diff_pos_final)
         norm_diff_ori_final = np.linalg.norm(diff_ori_final)
 
-        if (norm_diff_pos < MIN_DIFF_POS and (norm_diff_ori < MIN_DIFF_ORI or np.abs(norm_diff_ori - 2 * np.pi) < MIN_DIFF_ORI)) and (
-            norm_diff_pos_final < MIN_DIFF_POS and (norm_diff_ori_final < MIN_DIFF_ORI or np.abs(norm_diff_ori_final - 2 * np.pi) < MIN_DIFF_ORI)):
+        if (
+            norm_diff_pos < MIN_DIFF_POS
+            and (norm_diff_ori < MIN_DIFF_ORI or np.abs(norm_diff_ori - 2 * np.pi) < MIN_DIFF_ORI)
+        ) and (
+            norm_diff_pos_final < MIN_DIFF_POS
+            and (norm_diff_ori_final < MIN_DIFF_ORI or np.abs(norm_diff_ori_final - 2 * np.pi) < MIN_DIFF_ORI)
+        ):
+            break
+
+        if not fast_set and sim.getSimulationTime() > simulation_time + t_stab:
             break
 
         last_pos = curr_pos
@@ -96,12 +108,9 @@ def set_quadcopter_pos_ori(position: ndarray,
         client.step()
 
 
-def quadcopter_control(position: ndarray,
-                       orientation: ndarray,
-                       quad_target_handle: Any,
-                       quad_base_handle: Any,
-                       sim: Any,
-                       client: Any):
+def quadcopter_control(
+    position: ndarray, orientation: ndarray, quad_target_handle: Any, quad_base_handle: Any, sim: Any, client: Any
+):
     """
     This method is used to move the quadcopter in the CoppeliaSim scene to the position pos.
     :param sim:
@@ -122,7 +131,9 @@ def quadcopter_control(position: ndarray,
 
     while True:
         curr_pos = next_pos if stabilized_pos else np.array(sim.getObjectPosition(quad_base_handle, sim.handle_world))
-        curr_ori = next_ori if stabilized_ori else np.array(sim.getObjectOrientation(quad_base_handle, sim.handle_world))
+        curr_ori = (
+            next_ori if stabilized_ori else np.array(sim.getObjectOrientation(quad_base_handle, sim.handle_world))
+        )
 
         diff_pos = position - curr_pos
         diff_ori = orientation - curr_ori
@@ -132,13 +143,17 @@ def quadcopter_control(position: ndarray,
         if not stabilized_pos and norm_diff_pos < MIN_VAR_POS:
             stabilized_pos = True
             is_pos_ori_stabilized = stabilized_pos and stabilized_ori
-            set_quadcopter_pos_ori(position, curr_ori, quad_target_handle, quad_base_handle, sim, client, not is_pos_ori_stabilized)
+            set_quadcopter_pos_ori(
+                position, curr_ori, quad_target_handle, quad_base_handle, sim, client, not is_pos_ori_stabilized
+            )
             next_pos = curr_pos = position
 
         if not stabilized_ori and (norm_diff_ori < MIN_VAR_ORI or np.abs(norm_diff_ori - 2 * np.pi) < MIN_VAR_ORI):
             stabilized_ori = True
             is_pos_ori_stabilized = stabilized_pos and stabilized_ori
-            set_quadcopter_pos_ori(curr_pos, orientation, quad_target_handle, quad_base_handle, sim, client, not is_pos_ori_stabilized)
+            set_quadcopter_pos_ori(
+                curr_pos, orientation, quad_target_handle, quad_base_handle, sim, client, not is_pos_ori_stabilized
+            )
             next_ori = curr_ori = orientation
 
         if stabilized_pos and stabilized_ori:
@@ -170,15 +185,17 @@ def get_image(idx: int, path: str, file_name: str, extension: str, vision_handle
     cv.imwrite(path + filename, img)
 
 
-def save_reconstruction_images(reconstruction_file_name: str,
-                               position_file_name: str,
-                               extension_img: str,
-                               path: str,
-                               vision_sensor_name: str,
-                               quadcopter_name: str,
-                               quadcopter_base: str,
-                               client: Any,
-                               sim: Any):
+def save_reconstruction_images(
+    reconstruction_file_name: str,
+    position_file_name: str,
+    extension_img: str,
+    path: str,
+    vision_sensor_name: str,
+    quadcopter_name: str,
+    quadcopter_base: str,
+    client: Any,
+    sim: Any,
+):
     """
     Method used to save reconstruction images
     :param sim:
@@ -194,67 +211,70 @@ def save_reconstruction_images(reconstruction_file_name: str,
     """
     handles = init_control([quadcopter_name, vision_sensor_name, quadcopter_base], sim)
     position: list[ndarray] = []
-    orientation:list[ndarray] = []
+    orientation: list[ndarray] = []
 
     if os.path.isfile(position_file_name):
-        with open(position_file_name, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',')
+        with open(position_file_name, "r") as csvfile:
+            reader = csv.reader(csvfile, delimiter=",")
             header = next(reader)
             for row in reader:
                 if float(row[2]) < 0.16:
-                    row[2] = '0.16'
+                    row[2] = "0.16"
 
                 position.append(np.array([float(v) for v in row[:3]]))
                 orientation.append(np.array([float(v) for v in row[3:]]))
     else:
-        print('Position csv file not found. Adjust the config.yaml file.')
+        print("Position csv file not found. Adjust the config.yaml file.")
         quit(-1)
 
     if not os.path.exists(path):
         os.makedirs(path)
 
-    if path[-1] != '/':
-        path += '/'
+    if path[-1] != "/":
+        path += "/"
 
     count_image = 0
     photo_count = len(position)
-    for pos, ori in zip(position, orientation):      
+    for pos, ori in zip(position, orientation):
         quadcopter_control(pos, ori, handles[quadcopter_name], handles[quadcopter_base], sim, client)
         get_image(count_image, path, reconstruction_file_name, extension_img, handles[vision_sensor_name], sim)
-        count_image += 1
-        print(f'\x1b[1K\r[{count_image}/{photo_count}] capture photo', end=' ')
 
-    print('')
-    print(f'Adjust the sequence to the maximum of {count_image} count_image images')
+        count_image += 1
+        print(f"\x1b[1K\r[{count_image}/{photo_count}] capture photo", end=" ")
+
+    print("")
+    print(f"Adjust the sequence to the maximum of {count_image} count_image images")
     sim.stopSimulation()
 
 
-if __name__ == '__main__':
-    settings = parse_settings_file('config.yaml')
+if __name__ == "__main__":
+    settings = parse_settings_file("config.yaml")
     client, sim = init_coppelia()
 
     n = len(sys.argv)
     if n > 2:
         folder = sys.argv[1]
         file_name = sys.argv[2]
-        
+
         if not os.path.isfile(file_name):
-            print('Position csv file not found.')
+            print("Position csv file not found.")
             quit(-1)
 
-        settings['path'] = folder
-        settings['positions file name'] = file_name
+        settings["path"] = folder
+        settings["positions file name"] = file_name
 
     try:
-        save_reconstruction_images(reconstruction_file_name=settings['filename'],
-                                path=settings['path'],
-                                position_file_name=settings['positions file name'],
-                                extension_img=settings['extension'],
-                                vision_sensor_name=settings['vision sensor names'][0],
-                                quadcopter_name=settings['quadcopter name'],
-                                quadcopter_base=settings['quadcopter base'],
-                                client=client,
-                                sim=sim)
+        save_reconstruction_images(
+            reconstruction_file_name=settings["filename"],
+            path=settings["path"],
+            position_file_name=settings["positions file name"],
+            extension_img=settings["extension"],
+            vision_sensor_name=settings["vision sensor names"][0],
+            quadcopter_name=settings["quadcopter name"],
+            quadcopter_base=settings["quadcopter base"],
+            client=client,
+            sim=sim,
+        )
     except Exception as err:
         sim.stopSimulation()
         print(err)
